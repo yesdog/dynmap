@@ -2,11 +2,9 @@ package org.dynmap.bukkit;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -102,12 +100,9 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
     private DynmapCore core;
     private PermissionProvider permissions;
     private String version;
-    public SnapshotCache sscache;
-    private boolean has_spout = false;
     public PlayerList playerList;
     private MapManager mapManager;
     public static DynmapPlugin plugin;
-    public SpoutPluginBlocks spb;
     public PluginManager pm;
     private Metrics metrics;
     private BukkitEnableCoreCallback enabCoreCB = new BukkitEnableCoreCallback();
@@ -169,26 +164,9 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
     private class BukkitEnableCoreCallback extends DynmapCore.EnableCoreCallbacks {
         @Override
         public void configurationLoaded() {
-            /* Check for Spout */
-            if(detectSpout()) {
-                if(core.configuration.getBoolean("spout/enabled", true)) {
-                    has_spout = true;
-                    Log.info("Detected Spout");
-                    if(spb == null) {
-                        spb = new SpoutPluginBlocks(DynmapPlugin.this);
-                    }
-                    modsused.add("SpoutPlugin");
-                }
-                else {
-                    Log.info("Detected Spout - Support Disabled");
-                }
-            }
-            if(!has_spout) {    /* If not, clean up old spout texture, if needed */
-                File st = new File(core.getDataFolder(), "renderdata/spout-texture.txt");
-                if(st.exists())
-                    st.delete();
-            }
-            
+            File st = new File(core.getDataFolder(), "renderdata/spout-texture.txt");
+            if(st.exists())
+                st.delete();
         }
     }
     
@@ -383,11 +361,11 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
         }
         @Override
         public double getCacheHitRate() {
-            return sscache.getHitRate();
+            return SnapshotCache.cache.getHitRate();
         }
         @Override
         public void resetCacheStats() {
-            sscache.resetStats();
+            SnapshotCache.cache.resetStats();
         }
         @Override
         public DynmapWorld getWorldByName(String wname) {
@@ -429,7 +407,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
         @Override
         public MapChunkCache createMapChunkCache(DynmapWorld w, List<DynmapChunk> chunks, 
                 boolean blockdata, boolean highesty, boolean biome, boolean rawbiome) {
-            MapChunkCache c = w.getChunkCache(chunks);
+            BaseMapChunkCache c = (BaseMapChunkCache) w.getChunkCache(chunks);
             if(c == null) { /* Can fail if not currently loaded */
                 return null;
             }
@@ -496,6 +474,8 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                     try { Thread.sleep(25); } catch (InterruptedException ix) {}
                 }
             }
+            /* Finish reading chunks in requesting thread z*/
+            c.readChunks();
             /* If cancelled due to world unload return nothing */
             if(w.isLoaded() == false)
                 return null;
@@ -842,7 +822,6 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
                 public void onPluginEnabled(PluginEnableEvent evt) {
                     if (!readyToEnable()) {
-                        spb.markPluginEnabled(evt.getPlugin());
                         if (readyToEnable()) { /* If we;re ready now, finish enable */
                             doEnable();   /* Finish enable */
                         }
@@ -867,25 +846,17 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
     }
     
     private boolean readyToEnable() {
-        if (spb != null) {
-            return spb.isReady();
-        }
         return true;
     }
     
     private void doEnable() {
-        /* Prep spout support, if needed */
-        if(spb != null) {
-            spb.processSpoutBlocks(this, core);
-        }
-        
         /* Enable core */
         if(!core.enableCore(enabCoreCB)) {
             this.setEnabled(false);
             return;
         }
         playerList = core.playerList;
-        sscache = new SnapshotCache(core.getSnapShotCacheSize(), core.useSoftRefInSnapShotCache());
+        SnapshotCache.cache = new SnapshotCache(core.getSnapShotCacheSize(), core.useSoftRefInSnapShotCache());
 
         /* Get map manager from core */
         mapManager = core.getMapManager();
@@ -919,9 +890,9 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
         /* Disable core */
         core.disableCore();
 
-        if(sscache != null) {
-            sscache.cleanup();
-            sscache = null; 
+        if(SnapshotCache.cache != null) {
+            SnapshotCache.cache.cleanup();
+            SnapshotCache.cache = null; 
         }
         Log.info("Disabled");
     }
@@ -1104,7 +1075,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 if(btt.typeid == 9) btt.typeid = 8;
                 if((bt != btt.typeid) || (btt.data != w.getBlockAt(loc).getData())) {
                     String wn = getWorld(w).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), btt.trigger);
                 }
             }
@@ -1172,7 +1143,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 public void onBlockPlace(BlockPlaceEvent event) {
                     Location loc = event.getBlock().getLocation();
                     String wn = getWorld(loc.getWorld()).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), "blockplace");
                 }
             };
@@ -1187,7 +1158,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                     if(b == null) return;   /* Stupid mod workaround */
                     Location loc = b.getLocation();
                     String wn = getWorld(loc.getWorld()).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), "blockbreak");
                 }
             };
@@ -1200,7 +1171,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 public void onLeavesDecay(LeavesDecayEvent event) {
                     Location loc = event.getBlock().getLocation();
                     String wn = getWorld(loc.getWorld()).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     if(onleaves) {
                         mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), "leavesdecay");
                     }
@@ -1215,7 +1186,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 public void onBlockBurn(BlockBurnEvent event) {
                     Location loc = event.getBlock().getLocation();
                     String wn = getWorld(loc.getWorld()).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     if(onburn) {
                         mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), "blockburn");
                     }
@@ -1279,14 +1250,14 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                     }
                     String wn = getWorld(loc.getWorld()).getName();
                     int x = loc.getBlockX(), y = loc.getBlockY(), z = loc.getBlockZ();
-                    sscache.invalidateSnapshot(wn, x, y, z);
+                    SnapshotCache.cache.invalidateSnapshot(wn, x, y, z);
                     if(onpiston)
                         mapManager.touch(wn, x, y, z, "pistonretract");
                     for(int i = 0; i < 2; i++) {
                         x += dir.getModX();
                         y += dir.getModY();
                         z += dir.getModZ();
-                        sscache.invalidateSnapshot(wn, x, y, z);
+                        SnapshotCache.cache.invalidateSnapshot(wn, x, y, z);
                         mapManager.touch(wn, x, y, z, "pistonretract");
                     }
                 }
@@ -1303,14 +1274,14 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                     }
                     String wn = getWorld(loc.getWorld()).getName();
                     int x = loc.getBlockX(), y = loc.getBlockY(), z = loc.getBlockZ();
-                    sscache.invalidateSnapshot(wn, x, y, z);
+                    SnapshotCache.cache.invalidateSnapshot(wn, x, y, z);
                     if(onpiston)
                         mapManager.touch(wn, x, y, z, "pistonretract");
                     for(int i = 0; i < 1+event.getLength(); i++) {
                         x += dir.getModX();
                         y += dir.getModY();
                         z += dir.getModZ();
-                        sscache.invalidateSnapshot(wn, x, y, z);
+                        SnapshotCache.cache.invalidateSnapshot(wn, x, y, z);
                         mapManager.touch(wn, x, y, z, "pistonretract");
                     }
                 }
@@ -1324,7 +1295,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 public void onBlockSpread(BlockSpreadEvent event) {
                     Location loc = event.getBlock().getLocation();
                     String wn = getWorld(loc.getWorld()).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), "blockspread");
                 }
             };
@@ -1337,7 +1308,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 public void onBlockForm(BlockFormEvent event) {
                     Location loc = event.getBlock().getLocation();
                     String wn = getWorld(loc.getWorld()).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), "blockform");
                 }
             };
@@ -1350,7 +1321,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 public void onBlockFade(BlockFadeEvent event) {
                     Location loc = event.getBlock().getLocation();
                     String wn = getWorld(loc.getWorld()).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), "blockfade");
                 }
             };
@@ -1365,7 +1336,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 public void onBlockGrow(BlockGrowEvent event) {
                     Location loc = event.getBlock().getLocation();
                     String wn = getWorld(loc.getWorld()).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), "blockgrow");
                 }
             };
@@ -1378,7 +1349,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 public void onBlockRedstone(BlockRedstoneEvent event) {
                     Location loc = event.getBlock().getLocation();
                     String wn = getWorld(loc.getWorld()).getName();
-                    sscache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+                    SnapshotCache.cache.invalidateSnapshot(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
                     mapManager.touch(wn, loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), "blockredstone");
                 }
             };
@@ -1435,7 +1406,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                     if(z < minz) minz = z;
                     if(z > maxz) maxz = z;
                 }
-                sscache.invalidateSnapshot(wname, minx, miny, minz, maxx, maxy, maxz);
+                SnapshotCache.cache.invalidateSnapshot(wname, minx, miny, minz, maxx, maxy, maxz);
                 if(onexplosion) {
                     mapManager.touchVolume(wname, minx, miny, minz, maxx, maxy, maxz, "entityexplode");
                 }
@@ -1482,7 +1453,7 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                     if(z < minz) minz = z;
                     if(z > maxz) maxz = z;
                 }
-                sscache.invalidateSnapshot(wname, minx, miny, minz, maxx, maxy, maxz);
+                SnapshotCache.cache.invalidateSnapshot(wname, minx, miny, minz, maxx, maxy, maxz);
                 if(onstructuregrow) {
                     mapManager.touchVolume(wname, minx, miny, minz, maxx, maxy, maxz, "structuregrow");
                 }
@@ -1513,18 +1484,6 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
             };
             pm.registerEvents(chunkTrigger, this);
         }
-    }
-
-    private boolean detectSpout() {
-        Plugin p = this.getServer().getPluginManager().getPlugin("Spout");
-        if(p != null) {
-            return p.isEnabled();
-        }
-        return false;
-    }
-    
-    public boolean hasSpout() {
-        return has_spout;
     }
 
     @Override
@@ -1573,14 +1532,6 @@ public class DynmapPlugin extends JavaPlugin implements DynmapAPI {
                 @Override
                 public int getValue() {
                     if (!core.configuration.getBoolean("disable-webserver", false))
-                        return 1;
-                    return 0;
-                }
-            });
-            features.addPlotter(new Metrics.Plotter("Spout") {
-                @Override
-                public int getValue() {
-                    if(plugin.has_spout)
                         return 1;
                     return 0;
                 }

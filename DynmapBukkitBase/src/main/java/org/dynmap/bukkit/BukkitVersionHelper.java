@@ -83,10 +83,6 @@ public abstract class BukkitVersionHelper {
      * Read raw biome ID from snapshot
      */
     public abstract Object[] getBiomeBaseFromSnapshot(ChunkSnapshot css);
-    /**
-     * Test if normal chunk snapshot
-     */
-//    public abstract boolean isCraftChunkSnapshot(ChunkSnapshot css);
     /** 
      * Remove entities from given chunk
      */

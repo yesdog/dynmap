@@ -168,7 +168,7 @@ public class BukkitWorld extends DynmapWorld {
     @Override
     public MapChunkCache getChunkCache(List<DynmapChunk> chunks) {
         if(isLoaded()) {
-            NewMapChunkCache c = new NewMapChunkCache();
+            LegacyMapChunkCache c = new LegacyMapChunkCache();
             c.setChunks(this, chunks);
             return c;
         }

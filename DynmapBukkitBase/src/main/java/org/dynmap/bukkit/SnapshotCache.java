@@ -17,7 +17,8 @@ public class SnapshotCache {
         public long inhabitedTicks;
         public DynIntHashMap tileData;
     };
-
+    public static SnapshotCache cache;
+    
     private CacheHashMap snapcache;
     private ReferenceQueue<SnapshotRec> refqueue;
     private long cache_attempts;

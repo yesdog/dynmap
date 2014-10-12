@@ -445,7 +445,7 @@ public class BukkitVersionHelperGlowstone extends BukkitVersionHelper {
 
     @Override
     public int getHealth(Player p) {
-        return p.getHealth();
+        return (int) p.getHealth();
     }
 
 }

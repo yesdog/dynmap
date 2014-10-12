@@ -2,27 +2,45 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>us.dynmap</groupId>
-	<name>DynmapBukkit</name>
-	<properties>
-		<timestamp>${maven.build.timestamp}</timestamp>
-		<maven.build.timestamp.format>yyyyMMddHHmm</maven.build.timestamp.format>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<BUILD_NUMBER>Dev${timestamp}</BUILD_NUMBER>
-	</properties>
+	<artifactId>DynmapBukkitBase</artifactId>
+	<name>DynmapBukkitBase</name>
 	<url>http://github.com/webbukkit/dynmap/</url>
 	<issueManagement>
 		<system>GitHub</system>
 		<url>https://github.com/webbukkit/dynmap/issues</url>
 	</issueManagement>
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>2.0.2</version>
+				<configuration>
+					<source>1.6</source>
+					<target>1.6</target>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+	<repositories>
+		<repository>
+			<releases>
+			</releases>
+			<snapshots>
+			</snapshots>
+			<id>bukkit-repo</id>
+			<url>http://repo.bukkit.org/content/repositories/releases/</url>
+		</repository>
+		<repository>
+			<releases>
+			</releases>
+			<snapshots>
+			</snapshots>
+			<id>dynmap-repo</id>
+			<url>http://repo.mikeprimm.com/</url>
+		</repository>
+	</repositories>
 	<version>2.0.0-SNAPSHOT</version>
-	<artifactId>DynmapBukkit</artifactId>
-	<packaging>pom</packaging>
-	<modules>
-		<module>dynmap</module>
-		
-		<module>DynmapBukkitBase</module>
-		<module>DynmapBukkit_1_7_10</module>
-	</modules>
 	<dependencies>
 		<dependency>
 			<groupId>org.bukkit</groupId>
@@ -33,16 +51,6 @@
 			<groupId>us.dynmap</groupId>
 			<artifactId>DynmapCore</artifactId>
 			<version>${project.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>us.dynmap</groupId>
-			<artifactId>dynmap-api</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.bukkit</groupId>
-			<artifactId>CraftBukkit</artifactId>
-			<version>1.7.10-R0.1-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 </project>

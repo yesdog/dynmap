@@ -22,43 +22,53 @@ import org.dynmap.utils.MapChunkCache;
 import org.dynmap.utils.MapIterator;
 import org.dynmap.utils.BlockStep;
 import org.dynmap.utils.VisibilityLimit;
-import org.getspout.spoutapi.block.SpoutChunk;
 
 /**
  * Container for managing chunks - dependent upon using chunk snapshots, since rendering is off server thread
  */
-public class NewMapChunkCache extends MapChunkCache {
+public abstract class BaseMapChunkCache extends MapChunkCache {
     private static boolean init = false;
-    private static boolean use_spout = false;    
 
-    private World w;
-    private DynmapWorld dw;
+    protected World w;
+    protected DynmapWorld dw;
     private int nsect;
-    private List<DynmapChunk> chunks;
-    private ListIterator<DynmapChunk> iterator;
-    private int x_min, x_max, z_min, z_max;
-    private int x_dim;
-    private boolean biome, biomeraw, highesty, blockdata;
-    private HiddenChunkStyle hidestyle = HiddenChunkStyle.FILL_AIR;
-    private List<VisibilityLimit> visible_limits = null;
-    private List<VisibilityLimit> hidden_limits = null;
-    private boolean isempty = true;
+    protected List<DynmapChunk> chunks;
+    protected ListIterator<DynmapChunk> iterator;
+    protected int x_min;
+
+    private int x_max;
+
+    protected int z_min;
+
+    private int z_max;
+    protected int x_dim;
+    protected boolean biome;
+
+    protected boolean biomeraw;
+
+    protected boolean highesty;
+
+    protected boolean blockdata;
+    protected HiddenChunkStyle hidestyle = HiddenChunkStyle.FILL_AIR;
+    protected List<VisibilityLimit> visible_limits = null;
+    protected List<VisibilityLimit> hidden_limits = null;
+    protected boolean isempty = true;
     private int snapcnt;
-    private ChunkSnapshot[] snaparray; /* Index = (x-x_min) + ((z-z_min)*x_dim) */
-    private DynIntHashMap[] snaptile;
+    protected ChunkSnapshot[] snaparray; /* Index = (x-x_min) + ((z-z_min)*x_dim) */
+    protected DynIntHashMap[] snaptile;
     private byte[][] sameneighborbiomecnt;
     private BiomeMap[][] biomemap;
     private boolean[][] isSectionNotEmpty; /* Indexed by snapshot index, then by section index */
-    private long[] inhabitedTicks;  /* Index = (x-x_min) + ((z-z_min)*x_dim) */
+    protected long[] inhabitedTicks;  /* Index = (x-x_min) + ((z-z_min)*x_dim) */
     
-    private static BukkitVersionHelper helper = BukkitVersionHelper.getHelper();
+    protected static BukkitVersionHelper helper = BukkitVersionHelper.getHelper();
     
     private static final BlockStep unstep[] = { BlockStep.X_MINUS, BlockStep.Y_MINUS, BlockStep.Z_MINUS,
         BlockStep.X_PLUS, BlockStep.Y_PLUS, BlockStep.Z_PLUS };
 
     private static BiomeMap[] biome_to_bmap;
 
-    private static final int getIndexInChunk(int cx, int cy, int cz) {
+    protected static final int getIndexInChunk(int cx, int cy, int cz) {
         return (cy << 8) | (cz << 4) | cx;
     }
 
@@ -161,9 +171,6 @@ public class NewMapChunkCache extends MapChunkCache {
                     if(snap != biome_css) {
                         biomebase = null;
                         biome_css = snap;
-                        if (biome_css instanceof SpoutChunkSnapshot) {
-                            biome_css = ((SpoutChunkSnapshot)biome_css).chunk;
-                        }
                         biomebase = helper.getBiomeBaseFromSnapshot(biome_css);
                     }
                     if(biomebase != null) {
@@ -677,68 +684,16 @@ public class NewMapChunkCache extends MapChunkCache {
             return (sy < 4);
         }
     }
-    
-    private static class SpoutChunkSnapshot implements ChunkSnapshot {
-        private ChunkSnapshot chunk;
-        private short[] customids; 
-        private final int shiftx;
-        private final int shiftz;
-        
-        SpoutChunkSnapshot(ChunkSnapshot chunk, short[] customids, int height) {
-            this.chunk = chunk;
-            this.customids = customids.clone();
-            int sx = 11;
-            int sz = 7; /* 128 high values */
-            while(height > 128) {
-                sx++;
-                sz++;
-                height = (height >> 1);
-            }
-            shiftx = sx;
-            shiftz = sz;
-        }
-        /* Need these for interface, but not used */
-        public final int getX() { return chunk.getX(); }
-        public final int getZ() { return chunk.getZ(); }
-        public final String getWorldName() { return chunk.getWorldName(); }
-        public final Biome getBiome(int x, int z) { return chunk.getBiome(x, z); }
-        public final double getRawBiomeTemperature(int x, int z) { return chunk.getRawBiomeTemperature(x, z); }
-        public final double getRawBiomeRainfall(int x, int z) { return chunk.getRawBiomeRainfall(x, z); }
-        public final long getCaptureFullTime() { return chunk.getCaptureFullTime(); }
-        
-        public final int getBlockTypeId(int x, int y, int z) {
-            int id = customids[(x << shiftx) | (z << shiftz) | y];
-            if(id != 0) return id;
-            return chunk.getBlockTypeId(x, y, z);
-        }
-        public final int getBlockData(int x, int y, int z) {
-            return chunk.getBlockData(x, y, z);
-        }
-        public final int getBlockSkyLight(int x, int y, int z) {
-            return chunk.getBlockSkyLight(x, y, z);
-        }
-        public final int getBlockEmittedLight(int x, int y, int z) {
-            return chunk.getBlockEmittedLight(x, y, z);
-        }
-        public final int getHighestBlockYAt(int x, int z) {
-            return chunk.getHighestBlockYAt(x, z);
-        }
-        public boolean isSectionEmpty(int sy) {
-            return chunk.isSectionEmpty(sy);
-        }
-    }
 
-    private static final EmptyChunk EMPTY = new EmptyChunk();
-    private static final PlainChunk STONE = new PlainChunk(1);
-    private static final PlainChunk OCEAN = new PlainChunk(9);
+    protected static final EmptyChunk EMPTY = new EmptyChunk();
+    protected static final PlainChunk STONE = new PlainChunk(1);
+    protected static final PlainChunk OCEAN = new PlainChunk(9);
 
     /**
      * Construct empty cache
      */
-    public NewMapChunkCache() {
+    public BaseMapChunkCache() {
         if(!init) {
-            use_spout = DynmapPlugin.plugin.hasSpout();
-            
             init = true;
         }
     }
@@ -780,210 +735,21 @@ public class NewMapChunkCache extends MapChunkCache {
         snaptile = new DynIntHashMap[snapcnt];
         isSectionNotEmpty = new boolean[snapcnt][];
     }
-    
-    private ChunkSnapshot checkSpoutData(Chunk c, ChunkSnapshot ss) {
-        if(c instanceof SpoutChunk) {
-            SpoutChunk sc = (SpoutChunk)c;
-            short[] custids = sc.getCustomBlockIds();
-            if(custids != null) {
-                return new SpoutChunkSnapshot(ss, custids, c.getWorld().getMaxHeight());
-            }
-        }
-        return ss;
-    }
-
-    public int loadChunks(int max_to_load) {
-        if(dw.isLoaded() == false)
-            return 0;
-        Object queue = helper.getUnloadQueue(w);
-        
-        int cnt = 0;
-        if(iterator == null)
-            iterator = chunks.listIterator();
-
-        DynmapCore.setIgnoreChunkLoads(true);
-        //boolean isnormral = w.getEnvironment() == Environment.NORMAL;
-        // Load the required chunks.
-        while((cnt < max_to_load) && iterator.hasNext()) {
-            long startTime = System.nanoTime();
-            DynmapChunk chunk = iterator.next();
-            boolean vis = true;
-            if(visible_limits != null) {
-                vis = false;
-                for(VisibilityLimit limit : visible_limits) {
-                    if (limit.doIntersectChunk(chunk.x, chunk.z)) {
-                        vis = true;
-                        break;
-                    }
-                }
-            }
-            if(vis && (hidden_limits != null)) {
-                for(VisibilityLimit limit : hidden_limits) {
-                    if (limit.doIntersectChunk(chunk.x, chunk.z)) {
-                        vis = false;
-                        break;
-                    }
-                }
-            }
-            /* Check if cached chunk snapshot found */
-            ChunkSnapshot ss = null;
-            long inhabited_ticks = 0;
-            DynIntHashMap tileData = null;
-            SnapshotRec ssr = DynmapPlugin.plugin.sscache.getSnapshot(dw.getName(), chunk.x, chunk.z, blockdata, biome, biomeraw, highesty); 
-            if(ssr != null) {
-                ss = ssr.ss;
-                inhabited_ticks = ssr.inhabitedTicks;
-                if(!vis) {
-                    if(hidestyle == HiddenChunkStyle.FILL_STONE_PLAIN)
-                        ss = STONE;
-                    else if(hidestyle == HiddenChunkStyle.FILL_OCEAN)
-                        ss = OCEAN;
-                    else
-                        ss = EMPTY;
-                }
-                int idx = (chunk.x-x_min) + (chunk.z - z_min)*x_dim;
-                snaparray[idx] = ss;
-                snaptile[idx] = ssr.tileData;
-                inhabitedTicks[idx] = inhabited_ticks;
-                
-                endChunkLoad(startTime, ChunkStats.CACHED_SNAPSHOT_HIT);
-                continue;
-            }
-            boolean wasLoaded = w.isChunkLoaded(chunk.x, chunk.z);
-            boolean didload = false;
-            boolean isunloadpending = false;
-            if (queue != null) {
-                isunloadpending = helper.isInUnloadQueue(queue, chunk.x, chunk.z);
-            }
-            if (isunloadpending) {  /* Workaround: can't be pending if not loaded */
-                wasLoaded = true;
-            }
-            try {
-                didload = w.loadChunk(chunk.x, chunk.z, false);
-            } catch (Throwable t) { /* Catch chunk error from Bukkit */
-                Log.warning("Bukkit error loading chunk " + chunk.x + "," + chunk.z + " on " + w.getName());
-                if(!wasLoaded) {    /* If wasn't loaded, we loaded it if it now is */
-                    didload = w.isChunkLoaded(chunk.x, chunk.z);
-                }
-            }
-            /* If it did load, make cache of it */
-            if(didload) {
-                tileData = new DynIntHashMap();
-
-                Chunk c = w.getChunkAt(chunk.x, chunk.z);   /* Get the chunk */
-                /* Get inhabited ticks count */
-                inhabited_ticks = helper.getInhabitedTicks(c);
-                if(!vis) {
-                    if(hidestyle == HiddenChunkStyle.FILL_STONE_PLAIN)
-                        ss = STONE;
-                    else if(hidestyle == HiddenChunkStyle.FILL_OCEAN)
-                        ss = OCEAN;
-                    else
-                        ss = EMPTY;
-                }
-                else {
-                    if(blockdata || highesty) {
-                        ss = c.getChunkSnapshot(highesty, biome, biomeraw);
-                        if(use_spout) {
-                            ss = checkSpoutData(c, ss);
-                        }
-                        /* Get tile entity data */
-                        List<Object> vals = new ArrayList<Object>();
-                        Map<?,?> tileents = helper.getTileEntitiesForChunk(c);
-                        for(Object t : tileents.values()) {
-                            int te_x = helper.getTileEntityX(t);
-                            int te_y = helper.getTileEntityY(t);
-                            int te_z = helper.getTileEntityZ(t);
-                            int cx = te_x & 0xF;
-                            int cz = te_z & 0xF;
-                            int blkid = ss.getBlockTypeId(cx, te_y, cz);
-                            int blkdat = ss.getBlockData(cx, te_y, cz);
-                            String[] te_fields = HDBlockModels.getTileEntityFieldsNeeded(blkid,  blkdat);
-                            if(te_fields != null) {
-                                Object nbtcompound = helper.readTileEntityNBT(t);
-                                
-                                vals.clear();
-                                for(String id: te_fields) {
-                                    Object val = helper.getFieldValue(nbtcompound, id);
-                                    if(val != null) {
-                                        vals.add(id);
-                                        vals.add(val);
-                                    }
-                                }
-                                if(vals.size() > 0) {
-                                    Object[] vlist = vals.toArray(new Object[vals.size()]);
-                                    tileData.put(getIndexInChunk(cx,te_y,cz), vlist);
-                                }
-                            }
-                        }
-                    }
-                    else
-                        ss = w.getEmptyChunkSnapshot(chunk.x, chunk.z, biome, biomeraw);
-                    if(ss != null) {
-                        ssr = new SnapshotRec();
-                        ssr.ss = ss;
-                        ssr.inhabitedTicks = inhabited_ticks;
-                        ssr.tileData = tileData;
-                        DynmapPlugin.plugin.sscache.putSnapshot(dw.getName(), chunk.x, chunk.z, ssr, blockdata, biome, biomeraw, highesty);
-                    }
-                }
-                int chunkIndex = (chunk.x-x_min) + (chunk.z - z_min)*x_dim;
-                snaparray[chunkIndex] = ss;
-                snaptile[chunkIndex] = tileData;
-                inhabitedTicks[chunkIndex] = inhabited_ticks;
-                
-                /* If wasn't loaded before, we need to do unload */
-                if (!wasLoaded) {
-                    /* Since we only remember ones we loaded, and we're synchronous, no player has
-                     * moved, so it must be safe (also prevent chunk leak, which appears to happen
-                     * because isChunkInUse defined "in use" as being within 256 blocks of a player,
-                     * while the actual in-use chunk area for a player where the chunks are managed
-                     * by the MC base server is 21x21 (or about a 160 block radius).
-                     * Also, if we did generate it, need to save it */
-                    helper.unloadChunkNoSave(w, c, chunk.x, chunk.z);
-                    endChunkLoad(startTime, ChunkStats.UNLOADED_CHUNKS);
-                }
-                else if (isunloadpending) { /* Else, if loaded and unload is pending */
-                    w.unloadChunkRequest(chunk.x, chunk.z); /* Request new unload */
-                    endChunkLoad(startTime, ChunkStats.LOADED_CHUNKS);
-                }
-                else {
-                    endChunkLoad(startTime, ChunkStats.LOADED_CHUNKS);
-                }
-            }
-            else {
-                endChunkLoad(startTime, ChunkStats.UNGENERATED_CHUNKS);
-            }
-            cnt++;
-        }
-        DynmapCore.setIgnoreChunkLoads(false);
-
-        if(iterator.hasNext() == false) {   /* If we're done */
-            isempty = true;
-            /* Fill missing chunks with empty dummy chunk */
-            for(int i = 0; i < snaparray.length; i++) {
-                if(snaparray[i] == null)
-                    snaparray[i] = EMPTY;
-                else if(snaparray[i] != EMPTY)
-                    isempty = false;
-            }
-        }
-
-        return cnt;
-    }
     /**
-     * Test if done loading
+     * Loading call executed from main server thread - must
+     * @param max_to_load - maximum number to load at once
+     * @return number loaded
      */
-    public boolean isDoneLoading() {
-        if(dw.isLoaded() == false) {
-            isempty = true;
-            unloadChunks();
-            return true;
-        }
-        if(iterator != null)
-            return !iterator.hasNext();
-        return false;
-    }
+    public abstract int loadChunks(int max_to_load);
+    /**
+     * Test if done loading (no more loadChunks calls needed)
+     */
+    public abstract boolean isDoneLoading();
+    /**
+     * Read call executed from off of main thread (if off thread loading is supported)
+     */
+    public abstract int readChunks();
+    
     /**
      * Test if all empty blocks
      */
@@ -991,7 +757,7 @@ public class NewMapChunkCache extends MapChunkCache {
         return isempty;
     }
     /**
-     * Unload chunks
+     * Unload chunks (cleanup - if needed)
      */
     public void unloadChunks() {
         if(snaparray != null) {
@@ -1002,6 +768,7 @@ public class NewMapChunkCache extends MapChunkCache {
             inhabitedTicks = null;
         }
     }
+    
     private void initSectionData(int idx) {
         isSectionNotEmpty[idx] = new boolean[nsect + 1];
         if(snaparray[idx] != EMPTY) {
